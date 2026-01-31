@@ -1,14 +1,14 @@
 import requests
 
-endpoint = "http://localhost:8000/api/"
+endpoint = "http://localhost:8000/api/products/"
 
 data = {
-    'name' : 'avocat',
+    'name' : 'ananas',
     'price' : 1000,
     'description' : 'fruit a noyau'
 }
 
-response = requests.get(endpoint)
+response = requests.get(endpoint, json=data)
 
 print(response.json())
 print(response.status_code)
