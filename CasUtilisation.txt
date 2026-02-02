@@ -193,16 +193,18 @@ def product_api_view(request):
 ---
 
 ## Étape 15 : Ajout des Méthodes PUT et DELETE
+
 - Utiliser `get_object_or_404` pour récupérer un objet.
 - Ajouter `'PUT'`, `'DELETE'` dans `@api_view`.
 - Exemple pour GET d'un élément :
-  ```python
-  if request.method == 'GET':
-      if pk:
-          product = get_object_or_404(Product, pk=pk)
-          serializer = ProductSerializer(product)
-          return Response(serializer.data)
-  ```
+
+```python
+if request.method == 'GET':
+    if pk:
+        product = get_object_or_404(Product, pk=pk)
+        serializer = ProductSerializer(product)
+        return Response(serializer.data)
+```
 
 ---
 
@@ -252,72 +254,160 @@ def product_api_view(request):
       queryset = Product.objects.all()
       serializer_class = ProductSerializer
   ```
-  Lui créer un fichier dit routers.py ou nous importons
-  from django.urls import path
-  from .viewset import ProductViewSet
-  from rest_framework.routers import DefaultRouter, SimpleRouter
+### Étape 19 : Configuration personnalisée d'un formulaire d'entrée des données
+- Aller dans `settings.py` du package `core`.
+- Au-dessus de la liste `MIDDLEWARE`, déclarer :
 
-  le routeurs par defaut pour les operations CRUD, les SimpleRouter pour Les CRUD particuliere
-  Utilisation du routeurs par defaut :
-  router = DefaultRouter()
-  router.register(r'meilleurs/products', ProductViewSet, basename='product')
-
-  urlpatterns = router.urls
-
-  Puis allons et placons le lien du fichier dans le urls.py de notre api
-
-  Son avantage des viewsets est que à partir de trois lignes seulement dans son api, (viewset.py) nous finissons tout d'un coup.
-  les trois lignes qui lui permettent qu'il soit générique, sont la:
-  class ProductViewSet(ModelViewSet):
-    serializer_class = ProductSerializer1
-    queryset = Product.objects.all()
-
-Pour vérifier dans le navigateur, taper : http://127.0.0.1:8000/api/meilleurs/products/
-qui va nous envoyer un formulaire HTML
-
-Étape 19 : Configuration personnalisée d'un formulaire d'entrée des données
-           aller dans settings.py du package core
-
-           au-dessus de la liste middleware, déclarons:
-           REST_FRAMEWORK = {
-        'DEFAULT_PARSER_CLASSES': [
-        'rest_framework.parsers.JSONParser', # J'accepte des données au format JSON
-        'rest_framework.parsers.FormParser', # J'accepte des données au format form-data
+```python
+REST_FRAMEWORK = {
+    'DEFAULT_PARSER_CLASSES': [
+        'rest_framework.parsers.JSONParser',  # Accepte des données au format JSON
+        'rest_framework.parsers.FormParser',  # Accepte des données au format form-data
         'rest_framework.renderers.BrowsableAPIRenderer',
-        ]
+    ]
 }
+```
 
-          Après avoir importé action depuis la bibliothèque rest_framework.decorators,
-          nous implémentons le code suivant:
-            # route pour les produits avec un prix sup a 500
-            @action(detail=False, methods=['GET'], url_path="expensive-product", url_name="expensive_product")
-            def expensive_product(self, request, *args, **kwargs):
-                products = Product.objects.filter(price__gte=500)
-                context={'request': request}
-                serializer = ProductSerializer1(products,many=True, context=context)
-                return Response(serializer.data, status=status.HTTP_200_OK)
+- Importer `action` depuis `rest_framework.decorators`.
+- Implémenter les actions personnalisées dans le ViewSet :
 
-            @action(detail=False, methods=['GET'], url_path="cheap-product", url_name="cheap_product")
-            def cheap_product(self, request, *args, **kwargs):
-                products = Product.objects.filter(price__lte=12)
-                context={'request': request}
-                serializer = ProductSerializer1(products,many=True, context=context)
-                return Response(serializer.data, status=status.HTTP_200_OK)
+```python
+# Route pour les produits avec un prix supérieur ou égal à 500 €
+@action(detail=False, methods=['GET'], url_path="expensive-product", url_name="expensive_product")
+def expensive_product(self, request, *args, **kwargs):
+    products = Product.objects.filter(price__gte=500)
+    context = {'request': request}
+    serializer = ProductSerializer1(products, many=True, context=context)
+    return Response(serializer.data, status=status.HTTP_200_OK)
 
-          le premier permet d'afficher les prix supérieurs ou égaux à 500 euros
-          l'autre pour afficher celles inférieures à 12.
+# Route pour les produits avec un prix inférieur ou égal à 12 €
+@action(detail=False, methods=['GET'], url_path="cheap-product", url_name="cheap_product")
+def cheap_product(self, request, *args, **kwargs):
+    products = Product.objects.filter(price__lte=12)
+    context = {'request': request}
+    serializer = ProductSerializer1(products, many=True, context=context)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+```
 
-          ils seront appelés de cette manière dans le navigateur:
+- Ces routes seront accessibles via :
+  - Produits chers : `http://localhost:8000/api/meilleurs/products/expensive-product/`
+  - Produits bon marché : `http://localhost:8000/api/meilleurs/products/cheap-product/`
 
-          le 1 : http://localhost:8000/api/meilleurs/products/expensive-product/
-          le 2 : http://localhost:8000/api/meilleurs/products/cheap-product/
+### Étape 20 : Création d'un fichier `mixing.py`
+
+- Créer un fichier `mixing.py` dans le répertoire `api`.
+- Importer les classes nécessaires :
+
+```python
+from .models import Product
+from .serializers import ProductSerializer1
+from rest_framework.mixins import *
+from rest_framework.generics import GenericAPIView
+```
+
+- Implémenter les vues avec mixins :
+
+```python
+class ProductListCreateView(ListModelMixin, CreateModelMixin, GenericAPIView):
+    queryset = Product.objects.all()
+    serializer_class = ProductSerializer1
+
+    def get(self, request, *args, **kwargs):
+        return self.list(request, *args, **kwargs)
+
+    def post(self, request, *args, **kwargs):
+        return self.create(request, *args, **kwargs)
+
+class ProductDetailView(RetrieveModelMixin, GenericAPIView):
+    queryset = Product.objects.all()
+    serializer_class = ProductSerializer1
+
+    def get(self, request, *args, **kwargs):
+        return self.retrieve(request, *args, **kwargs)
+
+class ProductDetailUpdateView(UpdateModelMixin, GenericAPIView):
+    queryset = Product.objects.all()
+    serializer_class = ProductSerializer1
+
+    def put(self, request, *args, **kwargs):
+        return self.update(request, *args, **kwargs)
+
+    def patch(self, request, *args, **kwargs):
+        return self.partial_update(request, *args, **kwargs)
+
+class ProductDetailDeleteView(DestroyModelMixin, GenericAPIView):
+    queryset = Product.objects.all()
+    serializer_class = ProductSerializer1
+
+    def delete(self, request, *args, **kwargs):
+        return self.destroy(request, *args, **kwargs)
+```
+
+- Ajouter les chemins dans `urls.py` du projet :
+
+```python
+from .mixing import ProductListCreateView, ProductDetailView, ProductDetailUpdateView, ProductDetailDeleteView
+
+urlpatterns = [
+    # ... autres chemins ...
+    path('meilleurs2/products/', ProductListCreateView.as_view(), name='product_list_create'),
+    path('meilleurs2/products/<int:pk>/', ProductDetailView.as_view(), name='product_detail'),
+    path('meilleurs2/products/<int:pk>/update/', ProductDetailUpdateView.as_view(), name='product_update'),
+    path('meilleurs2/products/<int:pk>/delete/', ProductDetailDeleteView.as_view(), name='product_delete'),
+]
+```
+
+- Pour simplifier, créer une vue combinée :
+
+```python
+class CombinedProductView(
+    ListModelMixin,
+    CreateModelMixin,
+    RetrieveModelMixin,
+    UpdateModelMixin,
+    DestroyModelMixin,
+    GenericAPIView
+):
+    queryset = Product.objects.all()
+    serializer_class = ProductSerializer1
+
+    def get(self, request, *args, **kwargs):
+        if 'pk' in kwargs:
+            return self.retrieve(request, *args, **kwargs)
+        return self.list(request, *args, **kwargs)
+
+    def post(self, request, *args, **kwargs):
+        return self.create(request, *args, **kwargs)
+
+    def put(self, request, *args, **kwargs):
+        return self.retrieve(request, *args, **kwargs)
+
+    def patch(self, request, *args, **kwargs):
+        return self.partial_update(request, *args, **kwargs)
+
+    def delete(self, request, *args, **kwargs):
+        return self.destroy(request, *args, **kwargs)
+```
+
+- Ajouter le chemin pour la vue combinée :
+
+```python
+path('combined/products/', CombinedProductView.as_view(), name='combined_product_view'),
+path('combined/products/<int:pk>/', CombinedProductView.as_view(), name='combined_product_detail_view'),
+```
+
+- Accès via :
+  - Liste et création : `http://localhost:8000/api/combined/products/`
+  - Détail, mise à jour, suppression : `http://localhost:8000/api/combined/products/<id>/`
 
 ---
 
 **Conseils Généraux :**
-- Toujours activer l'environnement virtuel.
-- Tester régulièrement avec le serveur en cours.
-- Utiliser DRF pour simplifier la sérialisation et la validation.
-- Éviter d'ajouter des champs dans le serializer qui n'existent pas dans le modèle, sauf surcharge de `create`.
+- Toujours activer l'environnement virtuel avant de travailler.
+- Tester régulièrement l'API avec le serveur en cours d'exécution.
+- Utiliser Django REST Framework pour simplifier la sérialisation et la validation des données.
+- Éviter d'ajouter des champs dans le sérialiseur qui n'existent pas dans le modèle, sauf en cas de surcharge de la méthode `create`.
+- Le `ReadOnlyModelViewSet` dans `views.py` permet uniquement les opérations GET (lecture seule).
+- Documenter les endpoints personnalisés pour faciliter la maintenance.
 
-Cette documentation couvre les bases de la création d'une API REST avec Django et DRF.
+Cette documentation couvre les bases de la création d'une API REST avec Django et Django REST Framework.
